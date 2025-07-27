@@ -1,0 +1,87 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment and secrets
+.env
+
+# Model and large binary files
+*.pt
+*.model
+*.safetensors
+*.pth
+*.bin
+openchat-phq9-lora/
+cache/
+*.cache
+model_checkpoints/
+training_logs/
+tensorboard/
+# Optional: keep JSON unless you truly want to ignore all
+!*.json
+
+# Optional media files (remove if needed)
+*.wav
+
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints
+
+# VSCode Workspace Storage
+.vscode-test/
+
+# MacOS
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# Docker
+*.pid
+docker-compose.override.yml
+
+# System files
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+
+# Python virtual environments
+venv/
+ENV/
+env/
+.venv/

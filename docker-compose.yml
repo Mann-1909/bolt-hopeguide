@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: backend
+    ports:
+      - "8000:8000"
+    command: python -m uvicorn phq9_api:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  frontend:
+    build:
+      context: .  # adjust to your frontend folder
+    container_name: frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_PHQ9_API_URL=http://backend:8000
+    depends_on:
+      - backend
