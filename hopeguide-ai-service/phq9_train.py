@@ -11,7 +11,7 @@ print("🔄 Loading model...")
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     quantization_config=bnb_config,
-    device_map="auto",
+    device_map="cpu",
     torch_dtype=torch.float16
 )
 

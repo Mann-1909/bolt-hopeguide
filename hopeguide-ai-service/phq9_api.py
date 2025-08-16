@@ -13,18 +13,12 @@ from pathlib import Path
 import traceback
 import warnings
 import psutil
-# from optimum.intel import INCModelForCausalLM
-from transformers import AutoTokenizer
+import mlflow
 
 # Suppress warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="torchvision.io.image")
 
-# Set environment variables
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
-os.environ["TORCH_USE_RTLD_GLOBAL"] = "1"
-os.environ["HF_HUB_OFFLINE"] = "0"
-
+BASE_DIR = Path(__file__).parent.resolve()
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,19 +43,12 @@ phq9_questions = [
     "Have you had thoughts of self-harm or felt that you would be better off dead?"
 ]
 
-# Use absolute paths
-current_dir = Path(__file__).parent.resolve()
-lora_dir = current_dir / "openchat-phq9-lora" / "checkpoint-1880"
-dataset_path = current_dir / "dataset.jsonl"
-
 # Initialize globals
 model = None
 tokenizer = None
 embedder = None
 dataset = []
 dataset_embeddings = None
-
-# Session state management
 session_states = {}
 
 # Crisis resources
@@ -73,6 +60,18 @@ CRISIS_RESOURCES = (
     "• Emergency Services: 911 or your local emergency number\n\n"
     "You are not alone - help is available right now."
 )
+
+# ===== MLflow loader =====
+def get_production_model_path():
+    try:
+        model_uri = f"models:/{MODEL_NAME}/Production"
+        local_path = artifacts.download_artifacts(model_uri=model_uri)
+        logger.info(f"✅ Downloaded Production model to {local_path}")
+        return Path(local_path)
+    except Exception as e:
+        logger.error(f"❌ Failed to fetch Production model from MLflow: {str(e)}")
+        logger.warning(f"Using fallback model at {FALLBACK_LORA_DIR}")
+        return FALLBACK_LORA_DIR
 
 # Check library versions for compatibility
 def check_library_versions():
@@ -123,22 +122,17 @@ def validate_lora_dir(lora_dir: Path):
     return True
 
 # Load models
+# Remove this import:
+# from transformers import BitsAndBytesConfig
+
+# Load models (CPU/GPU safe, no 4-bit)
 def load_models():
     global model, tokenizer, embedder
     base_model_name = "openchat/openchat_3.5"
     logger.info(f"Preparing to load base model: {base_model_name}")
 
-    # Check device
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info(f"Using device: {device}")
-
-    # Quantization config
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.float16,
-        bnb_4bit_use_double_quant=True,
-    )
 
     try:
         # Load tokenizer
@@ -146,44 +140,44 @@ def load_models():
             base_model_name,
             padding_side="left",
             trust_remote_code=True,
-            cache_dir=current_dir / "cache",
+            cache_dir=BASE_DIR / "cache",
         )
         logger.info("Tokenizer loaded successfully")
 
-        # Safety check for pad token
+        # Ensure pad token
         if tokenizer.pad_token_id is None:
             tokenizer.pad_token_id = tokenizer.eos_token_id
 
-        # Load base model
+        # Load base model (no quantization)
         base_model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
-            device_map="auto",  # Automatically maps to GPU if available
-            torch_dtype=torch.float16,
-            quantization_config=bnb_config,
+            device_map="auto" if device == "cuda" else None,
+            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
             trust_remote_code=True,
-            cache_dir=current_dir / "cache",
+            cache_dir=BASE_DIR / "cache",
             use_safetensors=True,
         )
         logger.info("Base model loaded successfully")
 
-        # Verify device placement
-        logger.info(f"Model device: {next(base_model.parameters()).device}")
-
-        # Load PEFT model
+        # Load PEFT LoRA model
         model = PeftModel.from_pretrained(
             base_model,
             str(lora_dir),
-            torch_dtype=torch.float16,
+            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
             is_trainable=False,
-            device_map="auto",
+            device_map="auto" if device == "cuda" else None,
         )
         model.eval()
         logger.info("PEFT model loaded successfully")
 
         # Load sentence transformer
-        embedder = SentenceTransformer("all-MiniLM-L6-v2", device="cuda" if torch.cuda.is_available() else "cpu")
+        embedder = SentenceTransformer(
+            "all-MiniLM-L6-v2", device=device
+        )
         logger.info("Sentence transformer loaded successfully")
+
         return True
+
     except Exception as e:
         logger.error(f"Error loading models: {str(e)}")
         logger.error(traceback.format_exc())

@@ -1,4 +1,4 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 import json
 from sentence_transformers import SentenceTransformer, util
@@ -8,28 +8,19 @@ import logging
 
 # Suppress unnecessary warnings
 logging.getLogger("transformers").setLevel(logging.ERROR)
-logging.getLogger("bitsandbytes").setLevel(logging.ERROR)
 
 base_model_name = "openchat/openchat_3.5"
 lora_dir = "/home/b221265ec/Bolt/OpenChat/openchat-phq9-lora/checkpoint-564"
 
-# Configure bitsandbytes properly
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,  # Match compute dtype to input
-    bnb_4bit_use_double_quant=True,
-)
-
-# Load tokenizer and model
+# Load tokenizer
 tokenizer = AutoTokenizer.from_pretrained(base_model_name, padding_side="left")
 tokenizer.pad_token = tokenizer.eos_token
 
+# Load base model without bitsandbytes
 base_model = AutoModelForCausalLM.from_pretrained(
     base_model_name,
-    device_map="auto",
-    torch_dtype=torch.float16,  # Consistent dtype
-    quantization_config=bnb_config
+    device_map="cpu",       # change to "cuda" if GPU is available
+    torch_dtype=torch.float16
 )
 
 # Load LoRA adapter
@@ -91,14 +82,7 @@ for entry in dataset:
 
 # Natural system prompt
 system_prompt = (
-    f"As HopeGuide, an empathetic psychiatrist, support someone with PHQ-9 score {{best_score}} by choosing a single, fitting metaphor (e.g., tree for resilience, light for hope, garden for nurturing, path for journey) based on their emotional tone and context. "
-    "Follow this structure: 1) Validate their feelings, e.g., 'I hear your pain about [specific mention]...'; "
-    "2) Identify a strength, e.g., 'Your [resilience/courage] shines like...'; "
-    "3) Suggest a unique CBT-inspired coping strategy (e.g., reframing negative thoughts, self-compassion, or 5-4-3-2-1 grounding) without repeating ideas; "
-    "4) Envision a hopeful future, e.g., 'Imagine a day when...'; "
-    "5) End with an open question, e.g., 'What feels possible today?' "
-    "Use warm, poetic language in 2-3 sentences, tailoring responses to their context (e.g., loss of parents) and avoiding reliance on example stories. "
-    "Ensure responses are concise, evidence-based, and hopeful. For scores >20, gently suggest professional resources like the National Suicide Prevention Lifeline."
+    f"As HopeGuide, an empathetic psychiatrist, support someone with PHQ-9 score {{best_score}} by choosing a single, fitting metaphor..."
 )
 
 # Start chat with clean history
@@ -141,48 +125,40 @@ while True:
     inputs = tokenizer(prompt, return_tensors="pt", return_attention_mask=True).to(model.device)
     input_length = inputs.input_ids.shape[1]
     
-    # Generate response - use sampling with temperature
+    # Generate response
     with torch.no_grad():
         outputs = model.generate(
-    **inputs,
-    max_new_tokens=150,
-    do_sample=True,
-    top_k=50,
-    top_p=0.95,
-    temperature=0.7,  # Lower for coherence
-    repetition_penalty=1.2,  # Less aggressive
-    pad_token_id=tokenizer.eos_token_id
-)
+            **inputs,
+            max_new_tokens=150,
+            do_sample=True,
+            top_k=50,
+            top_p=0.95,
+            temperature=0.7,
+            repetition_penalty=1.2,
+            pad_token_id=tokenizer.eos_token_id
+        )
     
-    # Decode only the new tokens
+    # Decode and clean response
     new_tokens = outputs[0, input_length:]
     response = tokenizer.decode(new_tokens, skip_special_tokens=True)
-    
-    # Clean up response
-    response = response.split("User:")[0]
     response = re.sub(r'^(System|User|Assistant):?\s*', '', response, flags=re.IGNORECASE)
-    response = re.sub(r'<.*?>', '', response)  # Remove HTML tags
-    response = re.sub(r'\[.*?\]', '', response)  # Remove markdown links
-    response = re.sub(r'[^\x00-\x7F]+', ' ', response)  # Remove non-ASCII
-    response = re.sub(r'\s+', ' ', response).strip()  # Normalize whitespace
-    # Sentence case and paragraph formatting
+    response = re.sub(r'<.*?>', '', response)
+    response = re.sub(r'\[.*?\]', '', response)
+    response = re.sub(r'[^\x00-\x7F]+', ' ', response)
+    response = re.sub(r'\s+', ' ', response).strip()
     sentences = re.split(r'(?<=[.!?]) +', response)
     sentences = [s.capitalize().strip() for s in sentences if s.strip()]
     response = '\n'.join(sentences)
-    # Handle empty responses
+    
     if not response:
         response = "I'm here to listen. Could you tell me more about how you're feeling?"
     
-    # Avoid repetition
     if response in previous_responses:
         response = "I appreciate you sharing that. Could you tell me more about what's been on your mind lately?"
     else:
         previous_responses.add(response)
     
-    # Print only the bot's natural response
     print(f"\nBot: {response}\n")
-    
-    # Add to conversation history
     conversation_history.append({"role": "assistant", "content": response})
     
     # Maintain conversation history
