@@ -85,3 +85,5 @@ venv/
 ENV/
 env/
 .venv/
+# Ignore virtual environment
+hopeguide-ai-service/ai-hope/
