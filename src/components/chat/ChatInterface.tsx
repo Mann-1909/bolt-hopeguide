@@ -56,7 +56,8 @@ export function ChatInterface({ sessionId: externalSessionId }: ChatInterfacePro
     setError('');
 
     try {
-      const response = await fetch('/phq9-chat', {
+      // const response = await fetch('/phq9-chat', for local dev
+      const response = await fetch('https://bolt-hopeguide-backend.onrender.com/phq9-chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
