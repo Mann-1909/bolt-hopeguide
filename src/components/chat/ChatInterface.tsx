@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, AlertCircle, Loader2 } from 'lucide-react';
+import { Send, Bot, User, AlertCircle } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 
@@ -13,9 +13,6 @@ interface Message {
 interface ChatInterfaceProps {
   sessionId?: string;
 }
-
-// ⬇️ CONFIGURATION: Pointing to your live Render backend
-const API_URL = "https://bolt-hopeguide.onrender.com/phq9-chat";
 
 export function ChatInterface({ sessionId: externalSessionId }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
@@ -59,7 +56,8 @@ export function ChatInterface({ sessionId: externalSessionId }: ChatInterfacePro
     setError('');
 
     try {
-      const response = await fetch(API_URL, {
+      // const response = await fetch('/phq9-chat', for local dev
+      const response = await fetch('https://bolt-hopeguide.onrender.com/phq9-chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -69,14 +67,14 @@ export function ChatInterface({ sessionId: externalSessionId }: ChatInterfacePro
             role: m.role,
             content: m.content,
           })),
-          session_id: sessionId, 
+          session_id: sessionId, // ✅ critical fix: use snake_case
         }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(
-          `Server Error (${response.status}): ${errorText}`
+          `HTTP error! status: ${response.status}, message: ${errorText}`,
         );
       }
 
@@ -85,23 +83,31 @@ export function ChatInterface({ sessionId: externalSessionId }: ChatInterfacePro
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: data.response || "I'm here to listen. Could you tell me more?",
+        content:
+          data.response ||
+          "I'm here to listen. Could you tell me more about how you're feeling?",
         timestamp: new Date(),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
       console.error('Chat error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      
-      // Customized error message for Render Free Tier latency
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : 'Unable to connect to the chat service.';
       setError(
-        `Unable to connect to HopeGuide. NOTE: The free server may be "waking up" (this can take up to 60 seconds). Please wait a moment and try again.`
+        `Failed to send message: ${errorMessage}. Ensure the backend server is running on http://localhost:8000 and the Vite proxy is configured in vite.config.ts to forward /phq9-chat to http://localhost:8000. For production, set VITE_PHQ9_API_URL to the backend URL.`,
       );
 
-      // Optional: Add a fallback "offline" message so the chat feels responsive
-      // const fallbackMessage: Message = { ... } 
-      // setMessages((prev) => [...prev, fallbackMessage]);
+      const fallbackMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content:
+          "I'm having trouble connecting to the chat service right now. Please ensure the backend server is running and reachable. In the meantime, I'm still here to listen. You can continue our conversation, and I'll do my best to provide support. If you're experiencing a mental health crisis, please reach out to a crisis helpline or emergency services immediately.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, fallbackMessage]);
     } finally {
       setLoading(false);
     }
@@ -149,7 +155,7 @@ export function ChatInterface({ sessionId: externalSessionId }: ChatInterfacePro
                   {message.content}
                 </p>
                 <p className="text-xs text-gray-500 mt-2">
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {message.timestamp.toLocaleTimeString()}
                 </p>
               </div>
             </Card>
@@ -164,9 +170,19 @@ export function ChatInterface({ sessionId: externalSessionId }: ChatInterfacePro
             <Card className="bg-white">
               <div className="p-4">
                 <div className="flex items-center space-x-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.1s' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.2s' }}
+                    ></div>
+                  </div>
                   <span className="text-sm text-gray-500">
-                    HopeGuide is thinking... (might take a moment)
+                    HopeGuide is thinking...
                   </span>
                 </div>
               </div>
@@ -180,11 +196,14 @@ export function ChatInterface({ sessionId: externalSessionId }: ChatInterfacePro
       {/* Error Message */}
       {error && (
         <div className="mx-4 mb-2">
-          <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-            <div className="text-sm text-red-700">
+          <div className="flex items-center space-x-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+            <div className="text-sm text-yellow-700">
               <p className="font-medium">Connection Issue</p>
               <p>{error}</p>
+              <p className="mt-1 text-xs">
+                To fix this: Ensure the backend server is running on http://localhost:8000 and the Vite proxy is configured in vite.config.ts to forward /phq9-chat to http://localhost:8000. For production, set VITE_PHQ9_API_URL to the backend URL.
+              </p>
             </div>
           </div>
         </div>
@@ -201,7 +220,6 @@ export function ChatInterface({ sessionId: externalSessionId }: ChatInterfacePro
             className="flex-1 resize-none border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
             rows={1}
             style={{ minHeight: '44px', maxHeight: '120px' }}
-            disabled={loading}
           />
           <Button
             onClick={sendMessage}
