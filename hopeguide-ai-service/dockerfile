@@ -11,5 +11,5 @@ EXPOSE 8000
 
 # Use Gunicorn with multiple Uvicorn workers for concurrency
 # 5 workers × 2 threads = ~10 concurrent requests
-CMD ["gunicorn", "app:app", "-k", "uvicorn.workers.UvicornWorker", "--workers", "5", "--threads", "2", "--bind", "0.0.0.0:8000", "--timeout", "120"]
+CMD ["gunicorn", "app:app", "-k", "uvicorn.workers.UvicornWorker", "--workers", "1", "--threads", "1", "--bind", "0.0.0.0:8000", "--timeout", "120"]
 
