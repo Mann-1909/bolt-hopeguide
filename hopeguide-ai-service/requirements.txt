@@ -66,22 +66,16 @@
 # //CPU# === Hopeguide AI Service Requirements ===
 # Core ML / AI
 # PyTorch & related
-
-# torch==2.7.1
-
+torch==2.7.1
 # torchvision and torchaudio omitted since not installed; add if needed
 # torchaudio==?
 # torchvision==?
 
-# transformers==4.53.2
-
+transformers==4.53.2
 sentencepiece==0.1.99  # not installed; you may need to pip install
 safetensors==0.5.3
-
-# peft==0.16.0
-
-# accelerate==1.8.1
-
+peft==0.16.0
+accelerate==1.8.1
 einops==0.7.0
 
 # Data & Utils
@@ -94,8 +88,7 @@ tqdm==4.67.1
 sentence-transformers==5.0.0
 
 # Infra
-# mlflow==3.2.0
-
+mlflow==3.2.0
 prometheus-client==0.22.1
 
 # API / Web
