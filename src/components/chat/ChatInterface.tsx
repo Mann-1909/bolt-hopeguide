@@ -41,6 +41,12 @@ export function ChatInterface() {
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
+    const apiBase = import.meta.env.VITE_PHQ9_API_URL;
+    if (!apiBase) {
+      setError('Backend API URL not configured.');
+      return;
+    }
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -48,34 +54,40 @@ export function ChatInterface() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    // ✅ create the new message list ONCE
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+
     setInput('');
     setLoading(true);
     setError('');
 
     try {
-      const res = await fetch(
-        `${import.meta.env.VITE_PHQ9_API_URL}/phq9-chat`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [...messages, userMessage].map((m) => ({
-              role: m.role,
-              content: m.content,
-            })),
-            session_id: sessionId ?? undefined,
-          }),
-        },
-      );
+      const payload: any = {
+        messages: updatedMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+      };
+
+      // ✅ only include session_id if it exists
+      if (sessionId) {
+        payload.session_id = sessionId;
+      }
+
+      const res = await fetch(`${apiBase}/phq9-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
-        throw new Error(`Backend error: ${res.status}`);
+        const text = await res.text();
+        throw new Error(`Backend error ${res.status}: ${text}`);
       }
 
       const data: ApiResponse = await res.json();
 
-      // 🔑 Update sessionId from backend
       if (data.session_id) {
         setSessionId(data.session_id);
       }
@@ -116,7 +128,6 @@ export function ChatInterface() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((m) => (
           <div
@@ -153,18 +164,15 @@ export function ChatInterface() {
         ))}
 
         {loading && (
-          <div className="flex items-center gap-3">
-            <Bot className="w-5 h-5 text-gray-400" />
-            <span className="text-sm text-gray-500">
-              HopeGuide is thinking…
-            </span>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Bot className="w-4 h-4" />
+            HopeGuide is thinking…
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Error */}
       {error && (
         <div className="p-3 bg-yellow-50 border border-yellow-200 text-sm flex gap-2">
           <AlertCircle className="w-4 h-4 text-yellow-600" />
@@ -172,7 +180,6 @@ export function ChatInterface() {
         </div>
       )}
 
-      {/* Input */}
       <div className="border-t p-4">
         <div className="flex gap-3">
           <textarea
